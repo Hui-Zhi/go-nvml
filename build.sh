@@ -6,5 +6,5 @@ cd nvml
 make
 cd ..
 
-go build gonvml.go
+go build gonvml.go main.go
 
