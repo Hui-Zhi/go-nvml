@@ -1,149 +1,68 @@
-// Need to have the below abilities:
-// Reference: http://github.com/nvidia/nvidia-docker
- 
+// Reference: https://github.com/nvidia/nvidia-docker
+
 package gonvml
 
-// #cgo LDFLAGS: -ldl -Wl,--unresolved-symbols=ignore-in-object-files
-// #include "nvml/gonvml.h"
+
+// #cgo LDFLAGS: -lnvidia-ml -L /usr/src/gdk/nvml/lib/
+// #include <nvml.h>
 import "C"
 
 import (
 	"fmt"
 )
 
-const (
-	szDriver   = C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE
-	szModel    = C.NVML_DEVICE_NAME_BUFFER_SIZE
-	szUUID     = C.NVML_DEVICE_UUID_BUFFER_SIZE
-	szProcs    = 32
-	szProcName = 64
-)
-
-var (
-	ErrCPUAffinity        = errors.New("failed to retrieve CPU affinity")
-	ErrUnsupportedP2PLink = errors.New("unsupported P2P link type")
-)
-
-type P2PLinkType uint
 
 const (
-	P2PLinkUnknown P2PLinkType = iota
-	P2PLinkCrossCPU
-	P2PLinkSameCPU
-	P2PLinkHostBridge
-	P2PLinkMultiSwitch
-	P2PLinkSingleSwitch
-	P2PLinkSameBoard
+	driverBufferSize = C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE
 )
 
-type P2PLink struct {
-	BusID string
-	Link  P2PLinkType
+func NVMLInit(){
+	C.nvmlInit()
 }
 
-func (t P2PLinkType) String() string {
-	switch t {
-	case P2PLinkCrossCPU:
-		return "Cross CPU socket"
-	case P2PLinkSameCPU:
-		return "Same CPU socket"
-	case P2PLinkHostBridge:
-		return "Host PCI bridge"
-	case P2PLinkMultiSwitch:
-		return "Multiple PCI switches"
-	case P2PLinkSingleSwitch:
-		return "Single PCI switch"
-	case P2PLinkSameBoard:
-		return "Same board"
-	case P2PLinkUnknown:
+func NVMLShutdown(){
+	C.nvmlShutdown()
+}
+
+func nvmlError(ret C.nvmlReturn_t) error {
+	if ret == C.NVML_SUCCESS {
+		return nil
 	}
-	return "???"
+
+	err := C.GoString(C.nvmlErrorString(ret))
+
+	return fmt.Errorf("NVML error: %v", err)
 }
 
-type ClockInfo struct{
-	Cores 	uint
-	Memory	uint
-}
+// In the current version, it's not used.
+func GetDriverVersion() (string, error) {
+	var driver [driverBufferSize]C.char
+	ret := C.nvmlSystemGetDriverVersion(&driver[0], driverBufferSize)
 
-type PCIInfo struct {
-	BusID			string
-	BAR1			uint64
-	Bandwidth	uint
-}
-
-type Device struct {
-	Model				string
-	UUID				string
-	Path				string
-	Power				uint
-	CPUAffinity	uint
-	PCI					PCIInfo
-	Clocks			ClockInfo
-	Topology		[]P2PLink
-}
-
-type UtilizationInfo struct {
-	GPU     uint
-	Memory  uint
-	Encoder uint
-	Decoder uint
-}
-
-type PCIThroughputInfo struct {
-	RX uint
-	TX uint
-}
-
-type PCIStatusInfo struct {
-	BAR1Used   uint64
-	Throughput PCIThroughputInfo
-}
-
-type ECCErrorsInfo struct {
-	L1Cache uint64
-	L2Cache uint64
-	Global  uint64
-}
-
-type MemoryInfo struct {
-	GlobalUsed uint64
-	ECCErrors  ECCErrorsInfo
-}
-
-type ProcessInfo struct {
-	PID        uint
-	Name       string
-	MemoryUsed uint64
-}
-
-type DeviceStatus struct {
-	Power       uint
-	Temperature uint
-	Utilization UtilizationInfo
-	Memory      MemoryInfo
-	Clocks      ClockInfo
-	PCI         PCIStatusInfo
-	Processes   []ProcessInfo
+	return C.GoString(&driver[0]), nvmlError(ret)
 }
 
 func GetDeviceCount() (uint, error) {
-	var n C.uint
+	var num C.uint
 
-	err := nvmlErr(C.nvmlDeviceGetCount(&n))
-	return uint(n), err
+	err := nvmlError(C.nvmlDeviceGetCount(&num))
+
+	return uint(num), err
 }
 
-func GetDevicePath(idx uint) (path string, err error) {
+func GetDevicePath(idx uint) (string, error) {
 	var dev C.nvmlDevice_t
 	var minor C.uint
 
-	err = nvmlErr(C.nvmlDeviceGetHandleByIndex(C.uint(idx), &dev))
-	if err != nil {
-		return
-	}
-	err = nvmlErr(C.nvmlDeviceGetMinorNumber(dev, &minor))
-	path = fmt.Sprintf("/dev/nvidia%d", uint(minor))
-	return
-}
+	err := nvmlError(C.nvmlDeviceGetHandleByIndex(C.uint(idx), &dev))
 
+	if err != nil {
+		return "", err
+	}
+
+	err = nvmlError(C.nvmlDeviceGetMinorNumber(dev, &minor))
+	path := fmt.Sprintf("/dev/nvidia%d", uint(minor))
+
+	return path, err
+}
 
