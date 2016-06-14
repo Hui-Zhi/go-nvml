@@ -1,18 +1,18 @@
-package gonvml_test
+package gonvml
 
 import (
-	"io/ioutil"
 	"testing"
-
-	"github.com/hui-zhi/gonvml"
+	"github.com/hui-zhi/go-nvml"
 )
 
-func TestGetNvidiaGPUInfo(t *testing.T) {
-	gpuInfo := gonvml.GetNvidiaGPUInfo()
+func TestNVMLInit(t *testing.T) {
+	NVMLInit()
+	t.Success()
 }
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
+func TestNVMLShutdown(t *testing.T) {
+	NVMLShutdown()
+	t.Success()
 }
+
 
